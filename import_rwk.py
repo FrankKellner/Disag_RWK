@@ -9,6 +9,7 @@ import csv
 import re
 import shutil
 import sys
+import uuid
 from collections import defaultdict
 from configparser import ConfigParser, ExtendedInterpolation
 from datetime import datetime
@@ -94,6 +95,8 @@ def truncate(value: str | None, max_len: int | None, context: str) -> str | None
 
 def clear_tables(cursor: pyodbc.Cursor) -> None:
     for table in (
+        "Leaguecompetitions_ShootersShots",
+        "Leaguecompetitions_Shooters",
         "TeamsShooters",
         "Leaguecompetitions_Competitions",
         "Teams",
@@ -122,8 +125,11 @@ def strip_trailing_number(klassenname: str) -> str:
 
 
 def import_teams(
-    cursor: pyodbc.Cursor, mannschaft_rows: list[dict], config: ConfigParser
-) -> dict[tuple[str, str], list[tuple[int, str]]]:
+    cursor: pyodbc.Cursor,
+    mannschaft_rows: list[dict],
+    config: ConfigParser,
+    club_info: dict[str, dict[str, str]],
+) -> dict[tuple[str, str], list[tuple[int, str, int]]]:
     lengths = column_lengths(cursor, "Teams")
     name_format = config["Teams"]["teamsname_format"]
     nameshort_format = config["Teams"]["teamsnameshort_format"]
@@ -131,17 +137,21 @@ def import_teams(
         "INSERT INTO Teams (idTeams, fidClubs, teamsname, teamsnameshort) "
         "VALUES (?, ?, ?, ?)"
     )
-    teams_by_key: dict[tuple[str, str], list[tuple[int, str]]] = defaultdict(list)
+    teams_by_key: dict[tuple[str, str], list[tuple[int, str, int]]] = defaultdict(list)
     for row in mannschaft_rows:
         vereinsid = row["Vereinsid"].strip()
         klassenname = row["Klassenname"].strip()
         nummer = int(row["Mannschaftsnummer"])
+        idteams = int(row["Mannschaftsid"])
+        club = club_info.get(vereinsid, {})
         format_vars = {
             "klassenname": klassenname,
             "klasse_ohne_zahl": strip_trailing_number(klassenname),
             "nummer": nummer,
             "vereinsid": vereinsid,
             "mannschaftsid": row["Mannschaftsid"].strip(),
+            "vereinsname": club.get("name", ""),
+            "vereinsort": club.get("ort", ""),
         }
         teamsname = truncate(
             name_format.format(**format_vars), lengths.get("teamsname"), "Teams.teamsname"
@@ -151,10 +161,8 @@ def import_teams(
             lengths.get("teamsnameshort"),
             "Teams.teamsnameshort",
         )
-        cursor.execute(
-            sql, int(row["Mannschaftsid"]), int(vereinsid), teamsname, teamsnameshort
-        )
-        teams_by_key[(klassenname, vereinsid)].append((nummer, teamsname))
+        cursor.execute(sql, idteams, int(vereinsid), teamsname, teamsnameshort)
+        teams_by_key[(klassenname, vereinsid)].append((nummer, teamsname, idteams))
     for key, candidates in teams_by_key.items():
         candidates.sort(key=lambda c: c[0])
     return teams_by_key
@@ -192,6 +200,28 @@ def import_shooters(
     return lookup_by_club, lookup_any
 
 
+def resolve_shooter_id(
+    schuetzenid: str,
+    vereinsid: str,
+    lookup_by_club: dict[tuple[str, str], int],
+    lookup_any: dict[str, int],
+) -> int | None:
+    idshooters = lookup_by_club.get((schuetzenid, vereinsid))
+    if idshooters is None:
+        idshooters = lookup_any.get(schuetzenid)
+        if idshooters is not None:
+            print(
+                f"WARNUNG: Schuetze {schuetzenid} nicht bei Verein {vereinsid} "
+                f"gefunden, verwende Eintrag aus anderem Verein"
+            )
+    return idshooters
+
+
+def roster_schuetzen(row: dict) -> list[str]:
+    columns = ("Schuetze1", "Schuetze2", "Schuetze3", "Schuetze4", "Schuetze5", "Schuetze6")
+    return [s for s in ((row.get(c) or "").strip() for c in columns) if s]
+
+
 def import_teams_shooters(
     cursor: pyodbc.Cursor,
     mannschaft_rows: list[dict],
@@ -202,18 +232,8 @@ def import_teams_shooters(
     for row in mannschaft_rows:
         vereinsid = row["Vereinsid"].strip()
         idteams = int(row["Mannschaftsid"])
-        for col in ("Schuetze1", "Schuetze2", "Schuetze3", "Schuetze4", "Schuetze5", "Schuetze6"):
-            schuetzenid = (row.get(col) or "").strip()
-            if not schuetzenid:
-                continue
-            idshooters = lookup_by_club.get((schuetzenid, vereinsid))
-            if idshooters is None:
-                idshooters = lookup_any.get(schuetzenid)
-                if idshooters is not None:
-                    print(
-                        f"WARNUNG: Schuetze {schuetzenid} nicht bei Verein {vereinsid} "
-                        f"gefunden, verwende Eintrag aus anderem Verein"
-                    )
+        for schuetzenid in roster_schuetzen(row):
+            idshooters = resolve_shooter_id(schuetzenid, vereinsid, lookup_by_club, lookup_any)
             if idshooters is None:
                 print(f"WARNUNG: Schuetze {schuetzenid} (Mannschaft {idteams}) nicht gefunden")
                 continue
@@ -221,16 +241,16 @@ def import_teams_shooters(
 
 
 class TeamResolver:
-    """Loest team1/team2-Namen auf; behandelt Vereine mit mehreren Mannschaften
-    in derselben Klasse (u.a. Vereins-Derbys) per Rotation ueber Hin-/Rueckrunde."""
+    """Loest team1/team2 (Name + idTeams) auf; behandelt Vereine mit mehreren
+    Mannschaften in derselben Klasse (u.a. Vereins-Derbys) per Rotation ueber Hin-/Rueckrunde."""
 
-    def __init__(self, teams_by_key: dict[tuple[str, str], list[tuple[int, str]]]):
+    def __init__(self, teams_by_key: dict[tuple[str, str], list[tuple[int, str, int]]]):
         self.teams_by_key = teams_by_key
         self.counters: dict[tuple[str, str], int] = defaultdict(int)
 
     def resolve_pair(
         self, klassenname: str, heim_id: str, gast_id: str, wettkampfnummer: str
-    ) -> tuple[str | None, str | None]:
+    ) -> tuple[tuple[str | None, int | None], tuple[str | None, int | None]]:
         heim_cands = self.teams_by_key.get((klassenname, heim_id), [])
         gast_cands = self.teams_by_key.get((klassenname, gast_id), [])
         if not heim_cands:
@@ -242,19 +262,22 @@ class TeamResolver:
             key = (klassenname, heim_id)
             first_home = self.counters[key] % 2 == 0
             self.counters[key] += 1
-            a, b = heim_cands[0][1], heim_cands[1][1]
-            return (a, b) if first_home else (b, a)
+            a, b = heim_cands[0], heim_cands[1]
+            a, b = (a, b) if first_home else (b, a)
+            return (a[1], a[2]), (b[1], b[2])
 
         return (
             self._pick(heim_cands, klassenname, heim_id),
             self._pick(gast_cands, klassenname, gast_id),
         )
 
-    def _pick(self, candidates: list[tuple[int, str]], klassenname: str, vereinsid: str) -> str | None:
+    def _pick(
+        self, candidates: list[tuple[int, str, int]], klassenname: str, vereinsid: str
+    ) -> tuple[str | None, int | None]:
         if not candidates:
-            return None
+            return None, None
         if len(candidates) == 1:
-            return candidates[0][1]
+            return candidates[0][1], candidates[0][2]
         key = (klassenname, vereinsid)
         idx = self.counters[key] % len(candidates)
         self.counters[key] += 1
@@ -262,14 +285,47 @@ class TeamResolver:
             f"WARNUNG: Mehrdeutige Mannschaft fuer Klasse '{klassenname}' / Verein {vereinsid} "
             f"- verwende Mannschaft #{candidates[idx][0]} (Rotation {idx + 1}/{len(candidates)})"
         )
-        return candidates[idx][1]
+        return candidates[idx][1], candidates[idx][2]
+
+
+def insert_competition_shooters(
+    cursor: pyodbc.Cursor,
+    id_lc: int,
+    team_idteams: int | None,
+    team_slot: int,
+    mannschaft_by_id: dict[int, dict],
+    lookup_by_club: dict[tuple[str, str], int],
+    lookup_any: dict[str, int],
+) -> None:
+    if team_idteams is None:
+        return
+    row = mannschaft_by_id.get(team_idteams)
+    if row is None:
+        return
+    vereinsid = row["Vereinsid"].strip()
+    sql = (
+        "INSERT INTO Leaguecompetitions_Shooters "
+        "(fidShooters, assessed, team, fidLeaguecompetitions_Competitions, fidRanges, position, fidDisciplines, resultid) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    for schuetzenid in roster_schuetzen(row):
+        idshooters = resolve_shooter_id(schuetzenid, vereinsid, lookup_by_club, lookup_any)
+        if idshooters is None:
+            print(f"WARNUNG: Schuetze {schuetzenid} (Wettkampf {id_lc}) nicht gefunden")
+            continue
+        cursor.execute(
+            sql, idshooters, 1, team_slot, id_lc, 0, 0, 0, str(uuid.uuid4()).upper()
+        )
 
 
 def import_leaguecompetitions(
     cursor: pyodbc.Cursor,
     wettkampf_rows: list[dict],
     vereinsid: int,
-    teams_by_key: dict[tuple[str, str], list[tuple[int, str]]],
+    teams_by_key: dict[tuple[str, str], list[tuple[int, str, int]]],
+    mannschaft_by_id: dict[int, dict],
+    lookup_by_club: dict[tuple[str, str], int],
+    lookup_any: dict[str, int],
 ) -> None:
     lengths = column_lengths(cursor, "Leaguecompetitions_Competitions")
     resolver = TeamResolver(teams_by_key)
@@ -290,16 +346,19 @@ def import_leaguecompetitions(
             f"{klassenname}, {wettkampfnummer}-{runde}", lengths.get("name"),
             "Leaguecompetitions_Competitions.name",
         )
-        team1, team2 = resolver.resolve_pair(
+        (team1_name, team1_id), (team2_name, team2_id) = resolver.resolve_pair(
             klassenname, row["Heimvereinid"].strip(), row["Gastvereinid"].strip(), wettkampfnummer
         )
-        team1 = truncate(team1, lengths.get("team1"), "Leaguecompetitions_Competitions.team1")
-        team2 = truncate(team2, lengths.get("team2"), "Leaguecompetitions_Competitions.team2")
+        team1 = truncate(team1_name, lengths.get("team1"), "Leaguecompetitions_Competitions.team1")
+        team2 = truncate(team2_name, lengths.get("team2"), "Leaguecompetitions_Competitions.team2")
         date = datetime.strptime(datum, "%d.%m.%Y").replace(hour=20, minute=0, second=0)
         additional_info = truncate(
             datum, lengths.get("additional_info"), "Leaguecompetitions_Competitions.additional_info"
         )
-        cursor.execute(sql, int(wettkampfnummer), name, team1, team2, date, 0, additional_info)
+        id_lc = int(wettkampfnummer)
+        cursor.execute(sql, id_lc, name, team1, team2, date, 0, additional_info)
+        insert_competition_shooters(cursor, id_lc, team1_id, 1, mannschaft_by_id, lookup_by_club, lookup_any)
+        insert_competition_shooters(cursor, id_lc, team2_id, 2, mannschaft_by_id, lookup_by_club, lookup_any)
 
 
 def main() -> None:
@@ -325,10 +384,18 @@ def main() -> None:
         cursor = conn.cursor()
         clear_tables(cursor)
         import_clubs(cursor, verein_rows)
-        teams_by_key = import_teams(cursor, mannschaft_rows, config)
+        club_info = {
+            row["Vereinsid"].strip(): {"name": row["Vereinsname"], "ort": row["Vereinsort"]}
+            for row in verein_rows
+        }
+        teams_by_key = import_teams(cursor, mannschaft_rows, config, club_info)
         lookup_by_club, lookup_any = import_shooters(cursor, schuetzen_rows, id_offset)
         import_teams_shooters(cursor, mannschaft_rows, lookup_by_club, lookup_any)
-        import_leaguecompetitions(cursor, wettkampf_rows, vereinsid, teams_by_key)
+        mannschaft_by_id = {int(row["Mannschaftsid"]): row for row in mannschaft_rows}
+        import_leaguecompetitions(
+            cursor, wettkampf_rows, vereinsid, teams_by_key,
+            mannschaft_by_id, lookup_by_club, lookup_any,
+        )
         conn.commit()
         for context, count in _truncation_counts.items():
             print(f"WARNUNG: {count}x gekuerzt, da zu lang fuer Feld: {context}")
