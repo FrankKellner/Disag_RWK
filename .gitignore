@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Access-Datenbanken und Begleitdateien (koennen personenbezogene Daten enthalten)
+*.mdb
+*.sdf
+*.ldb
+*.laccdb
+
+# CSV-Rohdaten (personenbezogene Daten: Schuetzen-/Vereinsnamen)
+RWK_CSV/
