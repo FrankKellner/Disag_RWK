@@ -19,6 +19,15 @@ Import-Lauf.
    - `Shooters` / `TeamsShooters`
    - `Leaguecompetitions_Competitions`
    - `Leaguecompetitions_Shooters`
+4. Exportiert die eigenen Heimwettkämpfe (mit aufgelösten Mannschaftsnamen) in
+   eine separate CSV-Datei (Ordner/Dateiname konfigurierbar).
+
+Hat ein Verein mehrere Mannschaften in derselben Klasse (z. B. bei
+Vereins-Derbys), fragt das Script beim ersten betroffenen Wettkampf (mit
+Datum und Klasse) interaktiv auf der Konsole nach, welche Mannschaftsnummer
+gemeint ist. Bei weiteren Wettkämpfen mit derselben Klasse/demselben Verein
+wird automatisch abwechselnd die jeweils andere Mannschaft verwendet, ohne
+erneut nachzufragen.
 
 ## Voraussetzungen
 
@@ -50,6 +59,18 @@ werden in `config.ini` festgelegt (siehe Kommentare in der Datei). Insbesondere:
   Mannschaftsnamen, z. B. mit den Platzhaltern `{klassenname}`,
   `{klasse_ohne_zahl}`, `{nummer}`, `{vereinsid}`, `{mannschaftsid}`,
   `{vereinsname}`, `{vereinsort}`.
+- `[Export] heimwettkaempfe_ordner` / `heimwettkaempfe_datei` legen fest, wohin
+  die CSV-Datei mit den eigenen Heimwettkämpfen (inkl. aufgelöster
+  Mannschaftsnamen) exportiert wird.
+- `[Klassen_Uebersetzung]` ist eine optionale Übersetzungstabelle für den
+  Klassennamen **ohne** die abschließende Mannschaftsnummer (z. B.
+  `Alters AUF = Alteraufgelegt`; die Nummer wird beim Anzeigen automatisch
+  wieder angehängt). Das Script legt diesen Abschnitt beim ersten Lauf
+  automatisch an (Identitätsabbildung) und ergänzt ihn bei neuen
+  Klassennamen-Stämmen aus `Wettkaempfe_<Jahr>.csv` – die Übersetzungen können
+  danach frei angepasst werden. Sie wirken sich auf die Mannschaftsnamen und
+  den Export der Heimwettkämpfe aus.
+
 
 ## Verwendung
 
