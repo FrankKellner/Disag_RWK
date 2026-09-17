@@ -33,12 +33,14 @@ erneut nachzufragen.
 
 - Windows mit installiertem **Microsoft Access Driver (\*.mdb, \*.accdb)**
   (64-Bit ODBC-Treiber, Teil des Access Database Engine Redistributable).
-- Python 3.10 oder neuer.
-- Virtuelle Umgebung mit dem Paket `pyodbc`, z. B.:
+- Python 3.10 oder neuer, im PATH verfügbar (`python` oder `py`).
+- Virtuelle Umgebung mit dem Paket `pyodbc` (siehe `requirements.txt`). Wird
+  beim Start über `Import_starten.bat` automatisch angelegt/ergänzt, falls
+  nicht vorhanden. Manuell geht das so:
 
   ```powershell
   python -m venv .venv
-  .\.venv\Scripts\pip.exe install pyodbc
+  .\.venv\Scripts\pip.exe install -r requirements.txt
   ```
 
 - Eine leere Vorlagen-Datenbank (`RWK_leer/RWK_leer.mdb`), z. B. exportiert aus
@@ -62,6 +64,9 @@ werden in `config.ini` festgelegt (siehe Kommentare in der Datei). Insbesondere:
 - `[Export] heimwettkaempfe_ordner` / `heimwettkaempfe_datei` legen fest, wohin
   die CSV-Datei mit den eigenen Heimwettkämpfen (inkl. aufgelöster
   Mannschaftsnamen) exportiert wird.
+- `[Logging] debug_level` steuert die Ausführlichkeit der Konsolenausgabe:
+  `error` (Standard, keine `WARNUNG:`-Meldungen wie z. B. gekürzte Felder),
+  `warnung` oder `debug` (zeigen zusätzlich `WARNUNG:`-Meldungen an).
 - `[Klassen_Uebersetzung]` ist eine optionale Übersetzungstabelle für den
   Klassennamen **ohne** die abschließende Mannschaftsnummer (z. B.
   `Alters AUF = Alteraufgelegt`; die Nummer wird beim Anzeigen automatisch
@@ -74,16 +79,26 @@ werden in `config.ini` festgelegt (siehe Kommentare in der Datei). Insbesondere:
 
 ## Verwendung
 
+### Per Doppelklick (Windows)
+
+`Import_starten.bat` doppelklicken. Beim ersten Start werden die virtuelle
+Umgebung `.venv` und das Paket `pyodbc` automatisch angelegt/installiert,
+falls sie noch fehlen. Danach löscht das Script eine eventuell vorhandene
+Zieldatenbank (`.mdb`/`.sdf`) und führt den Import neu aus. Am Ende bleibt
+das Konsolenfenster offen, damit Warnungen/Fehler gelesen werden können.
+
+### Über die Kommandozeile
+
 ```powershell
-.\.venv\Scripts\python.exe .\import_rwk.py [config.ini]
+.\.venv\Scripts\python.exe .\import_rwk.py [--neu] [config.ini]
 ```
 
-Um die Zieldatenbank komplett neu zu erzeugen (statt nur die Inhalte zu
-ersetzen), vorher die vorhandene Ziel-Datei löschen:
+Mit `--neu` wird die Zieldatenbank vor dem Import gelöscht und aus der
+Vorlage neu angelegt (statt nur die Inhalte in der bestehenden Datei zu
+ersetzen), z. B.:
 
 ```powershell
-Remove-Item .\RWK_2026\RWK_2026.mdb, .\RWK_2026\RWK_2026.sdf -ErrorAction SilentlyContinue
-.\.venv\Scripts\python.exe .\import_rwk.py
+.\.venv\Scripts\python.exe .\import_rwk.py --neu
 ```
 
 Das Script gibt am Ende Warnungen aus, z. B. bei gekürzten Feldern oder

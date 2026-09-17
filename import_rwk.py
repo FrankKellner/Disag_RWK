@@ -1,7 +1,9 @@
 """Importiert die RWK-CSV-Dateien (Verein, Mannschaften, Schuetzen, Wettkaempfe)
 in die Access-Zieldatenbank, wie in Instructions.txt beschrieben.
 
-Aufruf:  .venv\\Scripts\\python.exe import_rwk.py [config.ini]
+Aufruf:  .venv\\Scripts\\python.exe import_rwk.py [--neu] [config.ini]
+
+--neu  loescht eine eventuell vorhandene Zieldatenbank vor dem Import.
 """
 from __future__ import annotations
 
@@ -22,6 +24,19 @@ if hasattr(sys.stdout, "reconfigure"):
 
 BASE_DIR = Path(__file__).resolve().parent
 _truncation_counts: dict[str, int] = defaultdict(int)
+
+_LOG_LEVELS = {"error": 0, "warnung": 1, "debug": 2}
+_debug_level = 0
+
+
+def set_debug_level(value: str) -> None:
+    global _debug_level
+    _debug_level = _LOG_LEVELS.get(value.strip().lower(), 0)
+
+
+def warn(message: str) -> None:
+    if _debug_level >= _LOG_LEVELS["warnung"]:
+        print(f"WARNUNG: {message}")
 
 
 def load_config(path: Path) -> ConfigParser:
@@ -81,9 +96,15 @@ def read_csv(path: Path, delimiter: str, encoding: str) -> list[dict]:
         return list(csv.DictReader(f, delimiter=delimiter))
 
 
-def ensure_target_mdb(config: ConfigParser) -> Path:
+def ensure_target_mdb(config: ConfigParser, neu: bool = False) -> Path:
     template = BASE_DIR / config["Pfade"]["mdb_vorlage"]
     target = BASE_DIR / config["Pfade"]["mdb_ziel"]
+    if neu and target.exists():
+        target.unlink()
+        target_sdf = target.with_suffix(".sdf")
+        if target_sdf.exists():
+            target_sdf.unlink()
+        print(f"Vorhandene Zieldatenbank geloescht: {target}")
     if not target.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(template, target)
@@ -257,8 +278,8 @@ def resolve_shooter_id(
     if idshooters is None:
         idshooters = lookup_any.get(schuetzenid)
         if idshooters is not None:
-            print(
-                f"WARNUNG: Schuetze {schuetzenid} nicht bei Verein {vereinsid} "
+            warn(
+                f"Schuetze {schuetzenid} nicht bei Verein {vereinsid} "
                 f"gefunden, verwende Eintrag aus anderem Verein"
             )
     return idshooters
@@ -282,7 +303,7 @@ def import_teams_shooters(
         for schuetzenid in roster_schuetzen(row):
             idshooters = resolve_shooter_id(schuetzenid, vereinsid, lookup_by_club, lookup_any)
             if idshooters is None:
-                print(f"WARNUNG: Schuetze {schuetzenid} (Mannschaft {idteams}) nicht gefunden")
+                warn(f"Schuetze {schuetzenid} (Mannschaft {idteams}) nicht gefunden")
                 continue
             cursor.execute(sql, idteams, idshooters)
 
@@ -294,9 +315,17 @@ class TeamResolver:
     ist. Bei weiteren Wettkaempfen mit derselben Klasse/demselben Verein wird
     automatisch abwechselnd die jeweils andere Mannschaft verwendet."""
 
-    def __init__(self, teams_by_key: dict[tuple[str, str], list[tuple[int, str, int]]]):
+    def __init__(
+        self,
+        teams_by_key: dict[tuple[str, str], list[tuple[int, str, int]]],
+        club_info: dict[str, dict[str, str]],
+    ):
         self.teams_by_key = teams_by_key
+        self.club_info = club_info
         self.last_choice: dict[tuple[str, str], tuple[int, str, int]] = {}
+
+    def _ort(self, vereinsid: str) -> str:
+        return self.club_info.get(vereinsid, {}).get("ort", vereinsid)
 
     def resolve_pair(
         self, klassenname: str, heim_id: str, gast_id: str, wettkampfnummer: str, datum: str
@@ -304,9 +333,9 @@ class TeamResolver:
         heim_cands = self.teams_by_key.get((klassenname, heim_id), [])
         gast_cands = self.teams_by_key.get((klassenname, gast_id), [])
         if not heim_cands:
-            print(f"WARNUNG: Keine Heimmannschaft fuer Klasse '{klassenname}' Verein {heim_id} (Wettkampf {wettkampfnummer})")
+            warn(f"Keine Heimmannschaft fuer Klasse '{klassenname}' Verein {heim_id} (Wettkampf {wettkampfnummer})")
         if not gast_cands:
-            print(f"WARNUNG: Keine Gastmannschaft fuer Klasse '{klassenname}' Verein {gast_id} (Wettkampf {wettkampfnummer})")
+            warn(f"Keine Gastmannschaft fuer Klasse '{klassenname}' Verein {gast_id} (Wettkampf {wettkampfnummer})")
 
         if heim_id == gast_id and len(heim_cands) > 1:
             key = (klassenname, heim_id)
@@ -317,7 +346,7 @@ class TeamResolver:
             else:
                 chosen_first = self._ask(
                     f"Wettkampf {wettkampfnummer} am {datum}, Klasse '{klassenname}': Vereins-Derby bei "
-                    f"Verein {heim_id} - welche Mannschaft ist die erste (Heim)?",
+                    f"{self._ort(heim_id)} - welche Mannschaft ist die erste (Heim)?",
                     (a, b),
                 )
             self.last_choice[key] = chosen_first
@@ -325,8 +354,8 @@ class TeamResolver:
             return (a[1], a[2]), (b[1], b[2])
 
         return (
-            self._pick(heim_cands, klassenname, heim_id, gast_id, "Heim", wettkampfnummer, datum),
-            self._pick(gast_cands, klassenname, gast_id, heim_id, "Gast", wettkampfnummer, datum),
+            self._pick(heim_cands, klassenname, heim_id, wettkampfnummer, datum),
+            self._pick(gast_cands, klassenname, gast_id, wettkampfnummer, datum),
         )
 
     def _pick(
@@ -334,8 +363,6 @@ class TeamResolver:
         candidates: list[tuple[int, str, int]],
         klassenname: str,
         vereinsid: str,
-        gegner_id: str,
-        rolle: str,
         wettkampfnummer: str,
         datum: str,
     ) -> tuple[str | None, int | None]:
@@ -349,9 +376,8 @@ class TeamResolver:
             chosen = self._other(candidates, previous)
         else:
             chosen = self._ask(
-                f"Wettkampf {wettkampfnummer} am {datum}, Klasse '{klassenname}': Verein {vereinsid} hat "
-                f"mehrere Mannschaften und spielt als {rolle} gegen Verein {gegner_id}. "
-                f"Welche Mannschaft ist die erste?",
+                f"Wettkampf {wettkampfnummer} am {datum}, Klasse '{klassenname}': {self._ort(vereinsid)} hat "
+                f"mehrere Mannschaften. Welche Mannschaft ist die erste?",
                 candidates,
             )
         self.last_choice[key] = chosen
@@ -402,7 +428,7 @@ def insert_competition_shooters(
     for schuetzenid in roster_schuetzen(row):
         idshooters = resolve_shooter_id(schuetzenid, vereinsid, lookup_by_club, lookup_any)
         if idshooters is None:
-            print(f"WARNUNG: Schuetze {schuetzenid} (Wettkampf {id_lc}) nicht gefunden")
+            warn(f"Schuetze {schuetzenid} (Wettkampf {id_lc}) nicht gefunden")
             continue
         cursor.execute(
             sql, idshooters, 1, team_slot, id_lc, 0, 0, 0, str(uuid.uuid4()).upper()
@@ -421,7 +447,7 @@ def import_leaguecompetitions(
     club_info: dict[str, dict[str, str]],
 ) -> list[dict]:
     lengths = column_lengths(cursor, "Leaguecompetitions_Competitions")
-    resolver = TeamResolver(teams_by_key)
+    resolver = TeamResolver(teams_by_key, club_info)
     sql = (
         "INSERT INTO Leaguecompetitions_Competitions "
         "(idLeaguecompetitions_Competitions, [name], team1, team2, [date], [type], additional_info) "
@@ -494,8 +520,12 @@ def export_heimwettkaempfe(config: ConfigParser, rows: list[dict]) -> None:
 
 
 def main() -> None:
-    config_path = BASE_DIR / (sys.argv[1] if len(sys.argv) > 1 else "config.ini")
+    args = sys.argv[1:]
+    neu = "--neu" in args
+    args = [a for a in args if a != "--neu"]
+    config_path = BASE_DIR / (args[0] if args else "config.ini")
     config = load_config(config_path)
+    set_debug_level(config.get("Logging", "debug_level", fallback="error"))
 
     csv_ordner = BASE_DIR / config["Pfade"]["csv_ordner"]
     delimiter = config["Sonstiges"]["csv_trennzeichen"]
@@ -516,7 +546,7 @@ def main() -> None:
     })
     translation_map = ensure_klassen_uebersetzung(config, config_path, klassen_stamme)
 
-    mdb_path = ensure_target_mdb(config)
+    mdb_path = ensure_target_mdb(config, neu)
     conn = connect(mdb_path)
     try:
         cursor = conn.cursor()
@@ -537,7 +567,7 @@ def main() -> None:
         conn.commit()
         export_heimwettkaempfe(config, heimwettkaempfe)
         for context, count in _truncation_counts.items():
-            print(f"WARNUNG: {count}x gekuerzt, da zu lang fuer Feld: {context}")
+            warn(f"{count}x gekuerzt, da zu lang fuer Feld: {context}")
         print("Import erfolgreich abgeschlossen.")
     except Exception:
         conn.rollback()
