@@ -49,6 +49,12 @@ erneut nachzufragen.
   `config.ini` konfigurierten Ordner, mit Semikolon als Trennzeichen und
   UTF-8-Kodierung (BOM).
 
+  Der Ordner `RWK_CSV/` mit den echten (personenbezogenen) Daten ist über
+  `.gitignore` vom Repository ausgeschlossen. Als Format-Referenz und zum
+  Ausprobieren liegt unter [`RWK_CSV_Beispiel/`](RWK_CSV_Beispiel/) ein
+  vollständig fiktiver Beispieldatensatz (erfundene Vereine, Personen und
+  Wettkämpfe) mit identischem Spaltenaufbau bei.
+
 ## Konfiguration
 
 Alle Pfade, Dateinamen, Spaltennamen und das Format der Mannschaftsnamen

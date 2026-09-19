@@ -1,0 +1,12 @@
+Schuetzenid;Nachname;Vorname;Vereinsids
+1000001;Mustermann;Max;50001
+1000002;Musterfrau;Erika;50001
+1000003;Mustermann;Lisa;50001
+1000004;Beispiel;Peter;50002
+1000005;Beispiel;Petra;50002
+1000006;Beispiel;Karl;50002
+1000007;Fiktiv;Anna;50003
+1000008;Fiktiv;Otto;50003
+1000009;Test;Julia;50004
+1000010;Test;Jonas;50004
+1000011;Doppel;Sabine;50002,50004
