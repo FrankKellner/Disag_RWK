@@ -11,6 +11,7 @@ __pycache__/
 
 # Ausnahme: leere Vorlagen-Datenbank ohne personenbezogene Daten
 !RWK_leer/RWK_leer.mdb
+!RWK_leer/RWK_leer.sdf
 
 # CSV-Rohdaten (personenbezogene Daten: Schuetzen-/Vereinsnamen)
 RWK_CSV/
