@@ -11,3 +11,4 @@ __pycache__/
 
 # CSV-Rohdaten (personenbezogene Daten: Schuetzen-/Vereinsnamen)
 RWK_CSV/
+.vscode/
