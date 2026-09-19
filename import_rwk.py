@@ -1,5 +1,5 @@
 """Importiert die RWK-CSV-Dateien (Verein, Mannschaften, Schuetzen, Wettkaempfe)
-in die Access-Zieldatenbank, wie in Instructions.txt beschrieben.
+in die Access-Zieldatenbank.
 
 Aufruf:  .venv\\Scripts\\python.exe import_rwk.py [--neu] [config.ini]
 

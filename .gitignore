@@ -9,6 +9,9 @@ __pycache__/
 *.ldb
 *.laccdb
 
+# Ausnahme: leere Vorlagen-Datenbank ohne personenbezogene Daten
+!RWK_leer/RWK_leer.mdb
+
 # CSV-Rohdaten (personenbezogene Daten: Schuetzen-/Vereinsnamen)
 RWK_CSV/
 .vscode/
