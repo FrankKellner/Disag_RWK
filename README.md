@@ -1,7 +1,7 @@
 # RWK Datenbank-Import (DISAG OpticScore - Server)
 
 Dieses Python-Script erzeugt eine neue Rundenwettkampf-Datenbank für das Tool
-**DISAG OpticScore - Server, Version 1.70.1** und befüllt sie automatisch aus
+**DISAG OpticScore - Server** und befüllt sie automatisch aus
 CSV-Exporten (Vereine, Mannschaften, Schützen, Wettkämpfe).
 
 Es ersetzt das manuelle Anlegen von Vereinen, Mannschaften, Schützen und
@@ -54,6 +54,10 @@ erneut nachzufragen.
   Ausprobieren liegt unter [`RWK_CSV_Beispiel/`](RWK_CSV_Beispiel/) ein
   vollständig fiktiver Beispieldatensatz (erfundene Vereine, Personen und
   Wettkämpfe) mit identischem Spaltenaufbau bei.
+
+  Getested mit:
+  DISAG OpticScore Version 1.60.9
+  DISAG OpticScore Version 1.70.1
 
 ## Konfiguration
 
