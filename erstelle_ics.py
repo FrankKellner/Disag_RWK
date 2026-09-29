@@ -128,7 +128,7 @@ def sammle_termine(
         try:
             tag = datetime.strptime(datum, "%d.%m.%Y")
         except ValueError:
-            rwk.warn(f"Ungueltiges Datum '{datum}' bei Wettkampf {wettkampfnummer}, uebersprungen")
+            print(f"WARNUNG: Ungueltiges Datum '{datum}' bei Wettkampf {wettkampfnummer}, uebersprungen")
             continue
         (team1_name, team1_id), (team2_name, team2_id) = resolver.resolve_pair(
             klassenname, heim_id, gast_id, wettkampfnummer, datum
