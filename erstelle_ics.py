@@ -9,7 +9,7 @@ import re
 import sys
 import uuid
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import import_rwk as rwk
@@ -165,7 +165,7 @@ def build_ics(termine: list[dict]) -> str:
         "CALSCALE:GREGORIAN",
         *VTIMEZONE_EUROPE_BERLIN.split("\n"),
     ]
-    dtstamp = format_dt(datetime.now())
+    dtstamp = format_dt(datetime.now(timezone.utc)) + "Z"
     for termin in sorted(termine, key=lambda t: t["start"]):
         lines += [
             "BEGIN:VEVENT",
