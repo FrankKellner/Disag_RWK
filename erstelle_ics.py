@@ -191,7 +191,7 @@ def schreibe_dateien(
     anzahl = 0
     for team_id, termine in termine_je_team.items():
         teamsname = team_name_by_id[team_id]
-        pfad = ausgabe_ordner / f"{sichere_dateiname(teamsname)}.ics"
+        pfad = ausgabe_ordner / f"{sichere_dateiname(teamsname)}_{team_id}.ics"
         with open(pfad, "w", encoding="utf-8", newline="") as f:
             f.write(build_ics(termine))
         anzahl += 1
