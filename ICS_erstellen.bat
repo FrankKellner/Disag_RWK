@@ -18,6 +18,16 @@ if not exist ".venv\Scripts\python.exe" (
     )
 )
 
+".venv\Scripts\python.exe" -c "import pyodbc" >nul 2>nul
+if errorlevel 1 (
+    echo Benoetigte Python-Pakete werden installiert ...
+    ".venv\Scripts\python.exe" -m pip install -r requirements.txt
+    if errorlevel 1 (
+        echo Installation der Pakete fehlgeschlagen.
+        pause
+        exit /b 1
+    )
+)
 ".venv\Scripts\python.exe" erstelle_ics.py
 echo.
 pause
