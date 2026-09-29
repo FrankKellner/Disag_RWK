@@ -227,6 +227,8 @@ def main() -> None:
     ausgabe_ordner = BASE_DIR / config.get("ICS", "ics_ordner", fallback="RWK_ICS")
     start_uhrzeit = parse_uhrzeit(config.get("ICS", "ics_start_uhrzeit", fallback="19:30"))
     end_uhrzeit = parse_uhrzeit(config.get("ICS", "ics_end_uhrzeit", fallback="22:00"))
+    if end_uhrzeit <= start_uhrzeit:
+        raise ValueError("[ICS] ics_end_uhrzeit muss nach ics_start_uhrzeit liegen")
 
     teams_by_key = build_teams_by_key(mannschaft_rows, config, club_info, translation_map)
     termine_je_team, team_name_by_id = sammle_termine(
