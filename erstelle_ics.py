@@ -34,6 +34,7 @@ DTSTART:19701025T030000
 RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE"""
+ICS_PRODID = "PRODID:-//Disag_RWK//erstelle_ics.py//DE"
 
 
 def build_teams_by_key(
@@ -161,7 +162,7 @@ def build_ics(termine: list[dict]) -> str:
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Disag_RWK//erstelle_ics.py//DE",
+        ICS_PRODID,
         "CALSCALE:GREGORIAN",
         *VTIMEZONE_EUROPE_BERLIN.split("\n"),
     ]
@@ -182,12 +183,23 @@ def build_ics(termine: list[dict]) -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
+def bereinige_dateien(ausgabe_ordner: Path) -> None:
+    for pfad in ausgabe_ordner.glob("*.ics"):
+        try:
+            ist_export_datei = ICS_PRODID in pfad.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        if ist_export_datei:
+            pfad.unlink()
+
+
 def schreibe_dateien(
     termine_je_team: dict[int, list[dict]],
     team_name_by_id: dict[int, str],
     ausgabe_ordner: Path,
 ) -> int:
     ausgabe_ordner.mkdir(parents=True, exist_ok=True)
+    bereinige_dateien(ausgabe_ordner)
     anzahl = 0
     for team_id, termine in termine_je_team.items():
         teamsname = team_name_by_id[team_id]
@@ -224,7 +236,11 @@ def main() -> None:
         dict(config.items("Klassen_Uebersetzung")) if config.has_section("Klassen_Uebersetzung") else {}
     )
 
-    ausgabe_ordner = BASE_DIR / config.get("ICS", "ics_ordner", fallback="RWK_ICS")
+    ausgabe_ordner = (
+        BASE_DIR
+        / config.get("ICS", "ics_ordner", fallback="RWK_ICS")
+        / config["RWK"]["RWK_Jahr"].strip()
+    )
     start_uhrzeit = parse_uhrzeit(config.get("ICS", "ics_start_uhrzeit", fallback="19:30"))
     end_uhrzeit = parse_uhrzeit(config.get("ICS", "ics_end_uhrzeit", fallback="22:00"))
     if end_uhrzeit <= start_uhrzeit:
