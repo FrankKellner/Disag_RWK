@@ -261,6 +261,11 @@ def main() -> None:
         wettkampf_rows, own_id, saison, teams_by_key, club_info, translation_map, start_uhrzeit, end_uhrzeit
     )
 
+    for (_, vereinsid), teams in teams_by_key.items():
+        if vereinsid == str(own_id):
+            for _, teamsname, team_id in teams:
+                team_name_by_id.setdefault(team_id, teamsname)
+                termine_je_team.setdefault(team_id, [])
     anzahl = schreibe_dateien(termine_je_team, team_name_by_id, ausgabe_ordner)
     print(f"{anzahl} ICS-Datei(en) erzeugt in {ausgabe_ordner}.")
 
