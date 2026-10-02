@@ -105,6 +105,7 @@ def format_dt(dt: datetime) -> str:
 def sammle_termine(
     wettkampf_rows: list[dict],
     own_id: int,
+    saison: str,
     teams_by_key: dict[tuple[str, str], list[tuple[int, str, int]]],
     club_info: dict[str, dict[str, str]],
     translation_map: dict[str, str],
@@ -143,6 +144,8 @@ def sammle_termine(
             team_name_by_id[team1_id] = team1_name
             termine_je_team[team1_id].append({
                 "start": start, "end": ende,
+                "saison": saison, "wettkampfnummer": wettkampfnummer,
+                "team_id": team1_id, "seite": "heim",
                 "titel": f"Wettkampf {disziplin} {gast_ort} Heim",
                 "ort": heim_ort,
                 "beschreibung": beschreibung,
@@ -151,6 +154,8 @@ def sammle_termine(
             team_name_by_id[team2_id] = team2_name
             termine_je_team[team2_id].append({
                 "start": start, "end": ende,
+                "saison": saison, "wettkampfnummer": wettkampfnummer,
+                "team_id": team2_id, "seite": "gast",
                 "titel": f"Wettkampf {disziplin} {heim_ort} Auswärts",
                 "ort": heim_ort,
                 "beschreibung": beschreibung,
@@ -168,9 +173,13 @@ def build_ics(termine: list[dict]) -> str:
     ]
     dtstamp = format_dt(datetime.now(timezone.utc)) + "Z"
     for termin in sorted(termine, key=lambda t: t["start"]):
+        uid = uuid.uuid5(
+            uuid.NAMESPACE_DNS,
+            f"disag-rwk:{termin['saison']}:{termin['wettkampfnummer']}:{termin['team_id']}:{termin['seite']}",
+        )
         lines += [
             "BEGIN:VEVENT",
-            f"UID:{uuid.uuid4()}@disag-rwk",
+            f"UID:{uid}@disag-rwk",
             f"DTSTAMP:{dtstamp}",
             f"DTSTART;TZID=Europe/Berlin:{format_dt(termin['start'])}",
             f"DTEND;TZID=Europe/Berlin:{format_dt(termin['end'])}",
@@ -236,10 +245,11 @@ def main() -> None:
         dict(config.items("Klassen_Uebersetzung")) if config.has_section("Klassen_Uebersetzung") else {}
     )
 
+    saison = config["RWK"]["RWK_Jahr"].strip()
     ausgabe_ordner = (
         BASE_DIR
         / config.get("ICS", "ics_ordner", fallback="RWK_ICS")
-        / config["RWK"]["RWK_Jahr"].strip()
+        / saison
     )
     start_uhrzeit = parse_uhrzeit(config.get("ICS", "ics_start_uhrzeit", fallback="19:30"))
     end_uhrzeit = parse_uhrzeit(config.get("ICS", "ics_end_uhrzeit", fallback="22:00"))
@@ -248,7 +258,7 @@ def main() -> None:
 
     teams_by_key = build_teams_by_key(mannschaft_rows, config, club_info, translation_map)
     termine_je_team, team_name_by_id = sammle_termine(
-        wettkampf_rows, own_id, teams_by_key, club_info, translation_map, start_uhrzeit, end_uhrzeit
+        wettkampf_rows, own_id, saison, teams_by_key, club_info, translation_map, start_uhrzeit, end_uhrzeit
     )
 
     anzahl = schreibe_dateien(termine_je_team, team_name_by_id, ausgabe_ordner)
