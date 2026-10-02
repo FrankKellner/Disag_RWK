@@ -114,6 +114,31 @@ ersetzen), z. B.:
 Das Script gibt am Ende Warnungen aus, z. B. bei gekürzten Feldern oder
 mehrdeutigen Mannschafts-Zuordnungen.
 
+## ICS-Kalenderdateien erzeugen
+
+`erstelle_ics.py` liest dieselben CSV-Dateien wie `import_rwk.py` und erzeugt
+pro eigener Mannschaft eine `.ics`-Kalenderdatei (Ordner konfigurierbar über
+`[ICS] ics_ordner`, Standard `RWK_ICS/`) mit allen Heim- **und**
+Auswärtswettkämpfen der Saison. Jeder Termin dauert per Standard 19:30–22:00
+Uhr (konfigurierbar über `[ICS] ics_start_uhrzeit` / `ics_end_uhrzeit`) und
+trägt als Titel `Wettkampf <Disziplin> <Ort des Gegners> Heim` bzw.
+`... Auswärts`. Das Disziplin-Kürzel wird aus dem Klassennamen abgeleitet:
+`LP` bei "Offen LP", `KK` bei "Offen KK", `LGA` bei allen auf "AUF" endenden
+Klassen, `AN` bei "Senioren AN" und sonst `LG`.
+
+Hat der eigene Verein mehrere Mannschaften in derselben Klasse, fragt das
+Script wie `import_rwk.py` interaktiv nach, welche Mannschaft gemeint ist.
+
+### Per Doppelklick (Windows)
+
+`ICS_erstellen.bat` doppelklicken.
+
+### Über die Kommandozeile
+
+```powershell
+.\.venv\Scripts\python.exe .\erstelle_ics.py [config.ini]
+```
+
 ## Lizenz und Haftungsausschluss
 
 Dieses Projekt darf frei als Open Source verwendet, verändert und
